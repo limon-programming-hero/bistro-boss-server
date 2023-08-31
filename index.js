@@ -27,11 +27,41 @@ async function run() {
 
         const menuData = client.db("bistroDb").collection("menu");
         const reviewData = client.db("bistroDb").collection("reviews");
+        const cartData = client.db('bistroDb').collection("carts");
 
+        // carts apis
+        app.get('/carts', async (req, res) => {
+            const email = req.query.email;
+
+            if (!email) {
+                res.send([]);
+            }
+            const query = { email: email };
+            const result = await cartData.find(query).toArray();
+            res.send(result);
+        });
+        // app.get('/carts', async (req, res) => {
+        //     const email = req.query.email;
+        //     const query = { email: email }
+        //     console.log(email)
+        //     const carts = await cartData.find({ email: email }).toArray();
+        //     console.log(carts)
+        //     res.send(carts);
+        // })
+        app.post('/carts', async (req, res) => {
+            const data = req.body;
+            const result = await cartData.insertOne(data);
+            res.send(result);
+        })
+
+
+        // menu apis
         app.get('/menu', async (req, res) => {
             const menu = await menuData.find({}).toArray();
             res.send(menu);
         })
+
+        // review apis
         app.get('/reviews', async (req, res) => {
             const reviews = await reviewData.find({}).toArray();
             res.send(reviews);
