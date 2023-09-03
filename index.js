@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000;
 
 // middleware 
@@ -25,45 +25,45 @@ async function run() {
     try {
         await client.connect();
 
-        const menuData = client.db("bistroDb").collection("menu");
-        const reviewData = client.db("bistroDb").collection("reviews");
-        const cartData = client.db('bistroDb').collection("carts");
+        const menuCollection = client.db("bistroDb").collection("menu");
+        const reviewCollection = client.db("bistroDb").collection("reviews");
+        const cartCollection = client.db('bistroDb').collection("carts");
 
         // carts apis
+
         app.get('/carts', async (req, res) => {
             const email = req.query.email;
-
+            const query = { email: email };
             if (!email) {
                 res.send([]);
             }
-            const query = { email: email };
-            const result = await cartData.find(query).toArray();
-            res.send(result);
-        });
-        // app.get('/carts', async (req, res) => {
-        //     const email = req.query.email;
-        //     const query = { email: email }
-        //     console.log(email)
-        //     const carts = await cartData.find({ email: email }).toArray();
-        //     console.log(carts)
-        //     res.send(carts);
-        // })
+            const carts = await cartCollection.find(query).toArray();
+            res.send(carts);
+        })
+
         app.post('/carts', async (req, res) => {
             const data = req.body;
-            const result = await cartData.insertOne(data);
+            const result = await cartCollection.insertOne(data);
+            res.send(result);
+        })
+        app.delete('/carts/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log("id", id)
+            const query = { _id: new ObjectId(id) };
+            const result = await cartCollection.deleteOne(query)
             res.send(result);
         })
 
 
         // menu apis
         app.get('/menu', async (req, res) => {
-            const menu = await menuData.find({}).toArray();
+            const menu = await menuCollection.find({}).toArray();
             res.send(menu);
         })
 
         // review apis
         app.get('/reviews', async (req, res) => {
-            const reviews = await reviewData.find({}).toArray();
+            const reviews = await reviewCollection.find({}).toArray();
             res.send(reviews);
         })
 
