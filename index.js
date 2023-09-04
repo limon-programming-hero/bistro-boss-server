@@ -28,6 +28,7 @@ async function run() {
         const menuCollection = client.db("bistroDb").collection("menu");
         const reviewCollection = client.db("bistroDb").collection("reviews");
         const cartCollection = client.db('bistroDb').collection("carts");
+        const userCollection = client.db("bistroDb").collection('users');
 
         // carts apis
 
@@ -67,6 +68,18 @@ async function run() {
             res.send(reviews);
         })
 
+        // User APIS
+        app.get('/users', async (req, res) => {
+            const users = await userCollection.find({}).toArray();
+            res.send(users);
+        })
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const result = await userCollection.insertOne(user);
+            console.log(user);
+            res.send(result)
+        })
+
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
@@ -84,3 +97,21 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`listening on port ${port}`)
 })
+
+
+// ----------------------All API naming conventions--------------------
+
+// ------------------------------for carts-----------------------------
+
+// app.get('/carts') using specified email by query
+// app.post('/carts') using body section
+// app.delete('/carts/:id')
+
+
+//  ----------------------------- for all users-------------------------
+
+// app.get('/users') {admin can only access}
+// app.post('/users') using body section {this will be done by sign up for every user at once}
+// app.patch('/users/:id') {admin can only access}
+// app.put('/users/:id') {admin can only access}
+// app.delete('/users/:id') {admin can only access}
