@@ -1,7 +1,8 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
-require('dotenv').config()
+require('dotenv').config();
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000;
 
@@ -21,6 +22,28 @@ const client = new MongoClient(uri, {
     }
 });
 
+const jwtVerify = async (req, res, next) => {
+    const token = req.headers.authorization;
+    // console.log('token : ', token);
+    if (!token) {
+        // console.log('token error')
+        return res.status(401).send({ error: 'Unauthorized user without token!' })
+    }
+    const jwtToken = token.split(' ')[1];
+    // console.log('jwt token :', jwtToken);
+    jwt.verify(jwtToken, process.env.JWT_SecretKey, function (err, decoded) {
+        if (err) {
+            console.log(err)
+            return res.status(401).send({ error: 'Unauthorized user with wrong token!' })
+        } else {
+            console.log(decoded)
+            req.decoded = decoded;
+            next()
+        }
+        ;
+    })
+}
+
 async function run() {
     try {
         await client.connect();
@@ -28,10 +51,9 @@ async function run() {
         const menuCollection = client.db("bistroDb").collection("menu");
         const reviewCollection = client.db("bistroDb").collection("reviews");
         const cartCollection = client.db('bistroDb').collection("carts");
-        const userCollection = client.db("bistroDb").collection('users');
+        const userCollection = client.db('bistroDb').collection("users");
 
         // carts apis
-
         app.get('/carts', async (req, res) => {
             const email = req.query.email;
             const query = { email: email };
@@ -42,7 +64,7 @@ async function run() {
             res.send(carts);
         })
 
-        app.post('/carts', async (req, res) => {
+        app.post('/carts', jwtVerify, async (req, res) => {
             const data = req.body;
             const result = await cartCollection.insertOne(data);
             res.send(result);
@@ -68,16 +90,25 @@ async function run() {
             res.send(reviews);
         })
 
-        // User APIS
-        app.get('/users', async (req, res) => {
-            const users = await userCollection.find({}).toArray();
-            res.send(users);
-        })
+        // user apis
         app.post('/users', async (req, res) => {
             const user = req.body;
-            const result = await userCollection.insertOne(user);
             console.log(user);
-            res.send(result)
+            const result = await userCollection.insertOne(user);
+            console.log(result)
+            res.send(result);
+        })
+        app.get('/users', async (req, res) => {
+            const result = await userCollection.find({}).toArray();
+            res.send(result);
+        })
+
+        // jwt sign in
+        app.post('/jwt', (req, res) => {
+            const user = req.body;
+            const jwtToken = jwt.sign(user, process.env.JWT_SecretKey, { expiresIn: '2d' });
+            // console.log(jwtToken);
+            res.send({ token: jwtToken });
         })
 
         // Send a ping to confirm a successful connection
@@ -97,21 +128,3 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`listening on port ${port}`)
 })
-
-
-// ----------------------All API naming conventions--------------------
-
-// ------------------------------for carts-----------------------------
-
-// app.get('/carts') using specified email by query
-// app.post('/carts') using body section
-// app.delete('/carts/:id')
-
-
-//  ----------------------------- for all users-------------------------
-
-// app.get('/users') {admin can only access}
-// app.post('/users') using body section {this will be done by sign up for every user at once}
-// app.patch('/users/:id') {admin can only access}
-// app.put('/users/:id') {admin can only access}
-// app.delete('/users/:id') {admin can only access}
