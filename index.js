@@ -102,6 +102,23 @@ async function run() {
             const result = await userCollection.find({}).toArray();
             res.send(result);
         })
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = { $set: { role: "Admin" } }
+            const result = await userCollection.updateOne(filter, updateDoc)
+            // console.log("result", result)
+            res.send(result);
+        })
+        app.delete('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) }
+            const result = await userCollection.deleteOne(filter)
+            // console.log("result", result)
+            res.send(result);
+        })
 
         // jwt sign in
         app.post('/jwt', (req, res) => {
