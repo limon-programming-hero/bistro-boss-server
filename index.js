@@ -36,7 +36,6 @@ const jwtVerify = async (req, res, next) => {
             console.log(err)
             return res.status(401).send({ error: 'Unauthorized user with wrong token!' })
         } else {
-            console.log(decoded)
             req.decoded = decoded;
             next()
         }
@@ -53,23 +52,38 @@ async function run() {
         const cartCollection = client.db('bistroDb').collection("carts");
         const userCollection = client.db('bistroDb').collection("users");
 
+        // verify admin 
+        // verifyJWT must be used before verifyAdmin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await userCollection.findOne(query);
+            if (!user || user?.role !== "Admin") {
+                res.status(401).send({ error: true, message: 'Unauthorized User' });
+            }
+            next();
+        }
         // carts apis
-        app.get('/carts', async (req, res) => {
+        app.get('/carts', jwtVerify, async (req, res) => {
             const email = req.query.email;
-            const query = { email: email };
             if (!email) {
                 res.send([]);
             }
+            if (req.decoded?.email !== email) {
+                res.status(403).send({ error: true, message: "Forbidden Access" });
+            }
+            const query = { email: email };
             const carts = await cartCollection.find(query).toArray();
             res.send(carts);
         })
-
+        // 
         app.post('/carts', jwtVerify, async (req, res) => {
             const data = req.body;
             const result = await cartCollection.insertOne(data);
             res.send(result);
         })
-        app.delete('/carts/:id', async (req, res) => {
+        // 
+        app.delete('/carts/:id', jwtVerify, async (req, res) => {
             const id = req.params.id;
             console.log("id", id)
             const query = { _id: new ObjectId(id) };
@@ -91,18 +105,26 @@ async function run() {
         })
 
         // user apis
-        app.post('/users', async (req, res) => {
+        app.post('/users', jwtVerify, async (req, res) => {
             const user = req.body;
             console.log(user);
             const result = await userCollection.insertOne(user);
             console.log(result)
             res.send(result);
         })
-        app.get('/users', async (req, res) => {
+        app.get('/users', jwtVerify, verifyAdmin, async (req, res) => {
             const result = await userCollection.find({}).toArray();
             res.send(result);
         })
-        app.patch('/users/admin/:id', async (req, res) => {
+        // checking google login user either exists in the database or not
+        app.get('/users/checkUser', jwtVerify, async (req, res) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await userCollection.findOne(query);
+            res.send({ user: user ? true : false })
+        })
+        // 
+        app.patch('/users/admin/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             console.log(id);
             const filter = { _id: new ObjectId(id) }
@@ -111,13 +133,29 @@ async function run() {
             // console.log("result", result)
             res.send(result);
         })
-        app.delete('/users/admin/:id', async (req, res) => {
+        // , jwtVerify, verifyAdmin
+        app.delete('/users/admin/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             console.log(id);
             const filter = { _id: new ObjectId(id) }
             const result = await userCollection.deleteOne(filter)
             // console.log("result", result)
             res.send(result);
+        })
+
+        // admin check
+        // jwt verify 
+        // same user or not checking
+        app.get('/users/admin/:email', jwtVerify, async (req, res) => {
+            const email = req.params.email;
+            if (req.decoded.email !== email) {
+                res.send({ admin: false })
+            }
+            const query = { email: email }
+            const result = await userCollection.findOne(query);
+            const isAdmin = result?.role === 'Admin' ? true : false;
+            console.log(isAdmin, result);
+            res.send({ admin: isAdmin });
         })
 
         // jwt sign in
