@@ -59,18 +59,19 @@ async function run() {
             const query = { email: email }
             const user = await userCollection.findOne(query);
             if (!user || user?.role !== "Admin") {
-                res.status(401).send({ error: true, message: 'Unauthorized User' });
-            }
-            next();
+                return res.status(403).send({ error: true, message: 'Unauthorized User access: not an admin!' });
+            } else {
+                next()
+            };
         }
         // carts apis
         app.get('/carts', jwtVerify, async (req, res) => {
             const email = req.query.email;
             if (!email) {
-                res.send([]);
+                return res.send([]);
             }
             if (req.decoded?.email !== email) {
-                res.status(403).send({ error: true, message: "Forbidden Access" });
+                return res.status(403).send({ error: true, message: "Forbidden Access" });
             }
             const query = { email: email };
             const carts = await cartCollection.find(query).toArray();
@@ -85,17 +86,21 @@ async function run() {
         // 
         app.delete('/carts/:id', jwtVerify, async (req, res) => {
             const id = req.params.id;
-            console.log("id", id)
+            // console.log("id", id)
             const query = { _id: new ObjectId(id) };
             const result = await cartCollection.deleteOne(query)
             res.send(result);
         })
 
-
         // menu apis
         app.get('/menu', async (req, res) => {
             const menu = await menuCollection.find({}).toArray();
             res.send(menu);
+        })
+        app.post('/menu', jwtVerify, verifyAdmin, async (req, res) => {
+            const item = req.body;
+            const result = await menuCollection.insertOne(item);
+            res.send(result);
         })
 
         // review apis
@@ -107,9 +112,9 @@ async function run() {
         // user apis
         app.post('/users', jwtVerify, async (req, res) => {
             const user = req.body;
-            console.log(user);
+            // console.log(user);
             const result = await userCollection.insertOne(user);
-            console.log(result)
+            // console.log(result)
             res.send(result);
         })
         app.get('/users', jwtVerify, verifyAdmin, async (req, res) => {
@@ -126,7 +131,7 @@ async function run() {
         // 
         app.patch('/users/admin/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            console.log(id);
+            // console.log(id);
             const filter = { _id: new ObjectId(id) }
             const updateDoc = { $set: { role: "Admin" } }
             const result = await userCollection.updateOne(filter, updateDoc)
@@ -136,7 +141,7 @@ async function run() {
         // , jwtVerify, verifyAdmin
         app.delete('/users/admin/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            console.log(id);
+            // console.log(id);
             const filter = { _id: new ObjectId(id) }
             const result = await userCollection.deleteOne(filter)
             // console.log("result", result)
@@ -149,12 +154,12 @@ async function run() {
         app.get('/users/admin/:email', jwtVerify, async (req, res) => {
             const email = req.params.email;
             if (req.decoded.email !== email) {
-                res.send({ admin: false })
+                return res.send({ admin: false })
             }
             const query = { email: email }
             const result = await userCollection.findOne(query);
             const isAdmin = result?.role === 'Admin' ? true : false;
-            console.log(isAdmin, result);
+            // console.log(isAdmin, result);
             res.send({ admin: isAdmin });
         })
 
@@ -183,3 +188,5 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`listening on port ${port}`)
 })
+
+// TODO: make all error message more professional without full description.
