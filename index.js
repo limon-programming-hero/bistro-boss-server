@@ -9,6 +9,7 @@ const port = process.env.PORT || 3000;
 // middleware 
 app.use(express.json());
 app.use(cors());
+const stripe = require('stripe')(process.env.VITE_Payment_Gateway_SK)
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@bistro-boss-cluster.ybeduom.mongodb.net/?retryWrites=true&w=majority`;
@@ -33,7 +34,7 @@ const jwtVerify = async (req, res, next) => {
     // console.log('jwt token :', jwtToken);
     jwt.verify(jwtToken, process.env.JWT_SecretKey, function (err, decoded) {
         if (err) {
-            console.log(err)
+            // console.log(err)
             return res.status(401).send({ error: 'Unauthorized user with wrong token!' })
         } else {
             req.decoded = decoded;
@@ -51,6 +52,7 @@ async function run() {
         const reviewCollection = client.db("bistroDb").collection("reviews");
         const cartCollection = client.db('bistroDb').collection("carts");
         const userCollection = client.db('bistroDb').collection("users");
+        const paymentCollection = client.db('bistroDb').collection('payments');
 
         // verify admin 
         // verifyJWT must be used before verifyAdmin
@@ -161,6 +163,114 @@ async function run() {
             const isAdmin = result?.role === 'Admin' ? true : false;
             // console.log(isAdmin, result);
             res.send({ admin: isAdmin });
+        })
+
+        // payment apis
+        // create payment intent 
+        app.post('/create-payment-intent', jwtVerify, async (req, res) => {
+            const price = req.body.price;
+            const amount = price * 100; // prices are here count in amount of paisa not tk
+            // console.log(amount)
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ['card']
+            })
+            // console.log(paymentIntent);
+            res.send({ clientSecret: paymentIntent.client_secret });
+        })
+        app.get('/payment', jwtVerify, async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                return res.send({})
+            }
+            if (req.decoded.email !== email) {
+                return res.status(403).send({ error: true, message: "Unauthorized user!" })
+            }
+            const result = await paymentCollection.find({ email: email }).toArray();
+            console.log(result)
+            res.send(result);
+        })
+        app.post('/payment', jwtVerify, async (req, res) => {
+            const data = req.body;
+            // console.log(data);
+            const insertResult = await paymentCollection.insertOne(data);
+            if (insertResult.acknowledged) {
+                const query = { _id: { $in: data.cartItems?.map(id => new ObjectId(id)) } }
+                const deleteResult = await cartCollection.deleteMany(query);
+                return res.send({ insertResult, deleteResult });
+            }
+            res.send({})
+        })
+        // getting admin statistics 
+        app.get('/admin-stats', jwtVerify, verifyAdmin, async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                return res.status(401).send({ error: true, message: 'Invalid email address' })
+            }
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ error: true, message: 'Unauthorized user access!' })
+            }
+            const customers = await userCollection.estimatedDocumentCount();
+            const products = await menuCollection.estimatedDocumentCount();
+            const paymentDetails = await paymentCollection.aggregate([
+                {
+                    $group: {
+                        _id: 'null',
+                        total: { $sum: "$price" },
+                        orders: { $sum: 1 }
+                    }
+                }
+            ]).toArray();
+            const { total: revenue, orders } = paymentDetails[0];
+            const paymentGraph = [
+                {
+                    $lookup: {
+                        from: 'menu',
+                        localField: 'menuItems',
+                        foreignField: '_id',
+                        as: 'menuOrderItems'
+                    }
+                },
+                {
+                    $unwind: "$menuOrderItems"
+                },
+                {
+                    $group: {
+                        _id: '$menuOrderItems.category',
+                        total: { $sum: "$menuOrderItems.price" },
+                        count: { $sum: 1 }
+                    }
+                },
+                {
+                    $project: {
+                        category: '$_id',
+                        _id: 0,
+                        total: 1,
+                        count: 1
+                    },
+                },
+            ]
+            const completedOrders = await paymentCollection.aggregate(paymentGraph).toArray();
+
+            // console.log(customers, products, revenue, orders, completedOrders)
+            res.send({ customers, products, revenue, orders, completedOrders })
+        })
+        // getting user statistics
+        app.get('/user-stats', jwtVerify, async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                return res.status(401).send({ error: true, message: 'Invalid email address' })
+            }
+            if (email !== req.decoded.email) {
+                return res.status(403).send({ error: true, message: 'Unauthorized user access!' })
+            }
+            const menu = await menuCollection.estimatedDocumentCount();
+            const review = (await reviewCollection.find({ email: email }).toArray()).length;
+            const payment = (await paymentCollection.find({ email: email }).toArray()).length;
+
+            // console.log("from stats", review, payment, menu);
+            res.send({ review, payment, menu })
         })
 
         // jwt sign in
