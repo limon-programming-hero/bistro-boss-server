@@ -112,7 +112,7 @@ async function run() {
             // console.log(result)
             res.send(result);
         })
-        app.put('/menu/:id', jwtVerify, verifyAdmin, async (req, res) => {
+        app.patch('/menu/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const item = req.body;
             const query = { _id: { $in: [new ObjectId(id), id] } };
