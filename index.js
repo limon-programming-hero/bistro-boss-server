@@ -25,9 +25,10 @@ const client = new MongoClient(uri, {
 
 const jwtVerify = async (req, res, next) => {
     const token = req.headers.authorization;
+    // console.log(token)
     // console.log('token : ', token);
     if (!token) {
-        // console.log('token error')
+        console.log('token error', token)
         return res.status(401).send({ error: 'Unauthorized user without token!' })
     }
     const jwtToken = token.split(' ')[1];
@@ -104,6 +105,22 @@ async function run() {
             const result = await menuCollection.insertOne(item);
             res.send(result);
         })
+        app.delete('/menu/:id', jwtVerify, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: { $in: [new ObjectId(id), id] } };
+            const result = await menuCollection.deleteOne(query);
+            // console.log(result)
+            res.send(result);
+        })
+        app.put('/menu/:id', jwtVerify, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const item = req.body;
+            const query = { _id: { $in: [new ObjectId(id), id] } };
+            const result = await menuCollection.updateOne(query, { $set: item });
+            // console.log(result)
+            res.send(result);
+
+        })
 
         // review apis
         app.get('/reviews', async (req, res) => {
@@ -152,7 +169,7 @@ async function run() {
 
         // admin check
         // jwt verify 
-        // same user or not checking
+        // checking same user or not 
         app.get('/users/admin/:email', jwtVerify, async (req, res) => {
             const email = req.params.email;
             if (req.decoded.email !== email) {
