@@ -53,6 +53,7 @@ async function run() {
         const reviewCollection = client.db("bistroDb").collection("reviews");
         const cartCollection = client.db('bistroDb').collection("carts");
         const userCollection = client.db('bistroDb').collection("users");
+        const contactCollection = client.db('bistroDb').collection("contacts");
         const paymentCollection = client.db('bistroDb').collection('payments');
 
         // verify admin 
@@ -129,25 +130,34 @@ async function run() {
         })
 
         // user apis
-        app.post('/users', jwtVerify, async (req, res) => {
+        app.post('/users', async (req, res) => {
             const user = req.body;
-            // console.log(user);
-            const result = await userCollection.insertOne(user);
-            // console.log(result)
-            res.send(result);
+            // console.log({ user })
+            const isExist = await userCollection.findOne({ email: user?.email });
+            if (isExist) {
+                // console.log({ isExist })
+                return res.send({ message: 'User already exists' })
+            } else {
+                const result = await userCollection.insertOne(user);
+                // console.log({ result })
+                res.send(result);
+            }
         })
         app.get('/users', jwtVerify, verifyAdmin, async (req, res) => {
             const result = await userCollection.find({}).toArray();
             res.send(result);
         })
         // checking google login user either exists in the database or not
-        app.get('/users/checkUser', jwtVerify, async (req, res) => {
-            const email = req.decoded.email;
+        app.get('/users/checkUser', async (req, res) => {
+            const email = req.query.email;
             const query = { email: email }
             const user = await userCollection.findOne(query);
-            res.send({ user: user ? true : false })
+            // console.log(user);
+            const result = user ? true : false;
+            // console.log({ result });
+            res.send({ user: result })
         })
-        // 
+        // updating user to admin  status
         app.patch('/users/admin/:id', jwtVerify, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             // console.log(id);
@@ -182,6 +192,28 @@ async function run() {
             res.send({ admin: isAdmin });
         })
 
+        // contact collection
+        app.post('/contact', jwtVerify, async (req, res) => {
+            const email = req.decoded.email;
+            const data = req.body;
+            // console.log(data);
+            // const 
+            if (data.email !== email) {
+                return res.status(403).send({ message: 'Provide same email!' })
+            }
+            const result = await contactCollection.insertOne(data)
+            res.send(result)
+        })
+        app.get("/contact", jwtVerify, verifyAdmin, async (req, res) => {
+            const result = await contactCollection.find({}).toArray();
+            res.send(result)
+        })
+        app.delete('/contact/:id', jwtVerify, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const result = await contactCollection.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        })
+
         // payment apis
         // create payment intent 
         app.post('/create-payment-intent', jwtVerify, async (req, res) => {
@@ -205,7 +237,7 @@ async function run() {
                 return res.status(403).send({ error: true, message: "Unauthorized user!" })
             }
             const result = await paymentCollection.find({ email: email }).toArray();
-            console.log(result)
+            // console.log(result)
             res.send(result);
         })
         app.post('/payment', jwtVerify, async (req, res) => {
